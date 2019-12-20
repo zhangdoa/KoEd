@@ -81,7 +81,6 @@ void extractNICNT(const std::string& inputFilePath, const std::string& outputDir
 	auto l_buffer = readFile(inputFilePath);
 	auto l_size = l_buffer.size();
 
-	//// Parsing char array
 	// Extract ProductHints
 	auto l_XMLNeedle = "<?xml";
 	auto l_ProductHintsNeedle = "</ProductHints>";
@@ -111,7 +110,9 @@ void extractNICNT(const std::string& inputFilePath, const std::string& outputDir
 	auto l_PNGStartPos = sstrstr(l_ProductHintsPos + strlen(l_ProductHintsNeedle), l_PNGStartNeedle, l_size);
 
 	// Extract lib info
-	auto l_LibInfoPos = sstrstr(l_ProductHintsPos, l_XMLNeedle, l_size);
+	auto l_LibEndNeedle = "</soundinfos>";
+	auto l_LibInfoStartPos = sstrstr(l_ProductHintsPos, l_XMLNeedle, l_size);
+	auto l_LibInfoEndPos = sstrstr(l_ProductHintsPos, l_LibEndNeedle, l_size);
 
 	if (l_PNGStartPos != nullptr)
 	{
@@ -121,11 +122,13 @@ void extractNICNT(const std::string& inputFilePath, const std::string& outputDir
 		auto l_PNGEndPos = sstrstr(l_ProductHintsPos + strlen(l_ProductHintsNeedle), l_PNGEndNeedle, l_size);
 
 		chunkSize.Bin4 = l_PNGStartPos - l_4thBinPos;
+
+		// From [ASCII89]PNG to IEND + 4B useless chunk data
 		chunkSize.Wallpaper = l_PNGEndPos - l_PNGStartPos + strlen(l_PNGEndNeedle) + 4;
 	}
 	else
 	{
-		chunkSize.Bin4 = l_LibInfoPos - l_4thBinPos;
+		chunkSize.Bin4 = l_LibInfoStartPos - l_4thBinPos;
 	}
 
 	// Separate string
@@ -134,7 +137,7 @@ void extractNICNT(const std::string& inputFilePath, const std::string& outputDir
 	chunkSize.Bin2 = l_3rdBinPos - l_2ndBinPos;
 	chunkSize.Bin3 = l_4thBinPos - l_3rdBinPos;
 
-	chunkSize.LibInfo = l_size - (l_LibInfoPos - &l_buffer[0]);
+	chunkSize.LibInfo = l_LibInfoEndPos - l_LibInfoStartPos + strlen(l_LibEndNeedle);
 
 	auto l_1stBin = std::string(&l_buffer[0], chunkSize.Bin1);
 	auto l_ProductHints = std::string(l_XMLStartPos, chunkSize.ProductHints);
@@ -142,7 +145,7 @@ void extractNICNT(const std::string& inputFilePath, const std::string& outputDir
 	auto l_3rdBin = std::string(l_3rdBinPos, chunkSize.Bin3);
 	auto l_4thBin = std::string(l_4thBinPos, chunkSize.Bin4);
 	auto l_Wallpaper = std::string(l_PNGStartPos, chunkSize.Wallpaper);
-	auto l_LibInfo = std::string(l_LibInfoPos, chunkSize.LibInfo);
+	auto l_LibInfo = std::string(l_LibInfoStartPos, chunkSize.LibInfo);
 
 	// Write bin
 	os.open(outputDirPath + fileName + "_Unknown_01.bin", std::ios::out | std::ios::ate | std::ios::binary);
@@ -209,6 +212,98 @@ void createNICNT(const std::string& inputFilePath, const std::string& outputDirP
 	os.close();
 }
 
+// The file structure of .nkx
+// Bin 1
+// Icon
+// ProductHints
+// Bin 2 53B
+// Lib info
+// Bin 3 261B
+// Wallpaper
+// Bin 4 ~ Product Name
+
+void extractNKX(const std::string& inputFilePath, const std::string& outputDirPath, const std::string& fileName)
+{
+	// Load .nkx
+	std::ofstream os;
+	auto l_buffer = readFile(inputFilePath);
+	auto l_size = l_buffer.size();
+
+	// Extract icon PNG
+	auto l_PNGStartNeedle = "PNG";
+	auto l_PNGEndNeedle = "IEND";
+
+	auto l_iconPNGStartPos = sstrstr(&l_buffer[0], l_PNGStartNeedle, l_size);
+
+	size_t l_iconPNGLen;
+	if (l_iconPNGStartPos != nullptr)
+	{
+		// For the ASCII character 89 before "PNG"
+		l_iconPNGStartPos--;
+
+		auto l_iconPNGEndPos = sstrstr(l_iconPNGStartPos + strlen(l_PNGStartNeedle), l_PNGEndNeedle, l_size);
+
+		// From [ASCII89]PNG to IEND + 4B useless chunk data
+		l_iconPNGLen = l_iconPNGEndPos - l_iconPNGStartPos + strlen(l_PNGEndNeedle) + 4;
+	}
+
+	// Extract ProductHints
+	auto l_XMLNeedle = "<?xml";
+	auto l_ProductHintsNeedle = "</ProductHints>";
+
+	auto l_XMLStartPos = sstrstr(&l_buffer[0], l_XMLNeedle, l_size);
+	auto l_ProductHintsPos = sstrstr(&l_buffer[0], l_ProductHintsNeedle, l_size);
+
+	// Extract lib info
+	auto l_LibEndNeedle = "</soundinfos>";
+	auto l_LibInfoStartPos = sstrstr(l_ProductHintsPos, l_XMLNeedle, l_size);
+	auto l_LibInfoEndPos = sstrstr(l_ProductHintsPos, l_LibEndNeedle, l_size);
+
+	// Extract wallpaper PNG
+	auto l_wallpaperPNGStartPos = sstrstr(l_LibInfoEndPos, l_PNGStartNeedle, l_size);
+
+	size_t l_wallpaperPNGLen;
+	size_t l_libInfoLen;
+	if (l_wallpaperPNGStartPos != nullptr)
+	{
+		// For the ASCII character 89 before "PNG"
+		l_wallpaperPNGStartPos--;
+
+		auto l_wallpaperPNGEndPos = sstrstr(l_wallpaperPNGStartPos + strlen(l_PNGStartNeedle), l_PNGEndNeedle, l_size);
+
+		// From [ASCII89]PNG to IEND + 4B useless chunk data
+		l_wallpaperPNGLen = l_wallpaperPNGEndPos - l_wallpaperPNGStartPos + strlen(l_PNGEndNeedle) + 4;
+	}
+
+	l_libInfoLen = l_LibInfoEndPos - l_LibInfoStartPos + strlen(l_LibEndNeedle);
+
+	// Separate string
+	auto l_icon = std::string(l_iconPNGStartPos, l_iconPNGLen);
+	auto l_ProductHints = std::string(l_XMLStartPos, l_ProductHintsPos - l_XMLStartPos + strlen(l_ProductHintsNeedle));
+	auto l_Wallpaper = std::string(l_wallpaperPNGStartPos, l_wallpaperPNGLen);
+	auto l_LibInfo = std::string(l_LibInfoStartPos, l_libInfoLen);
+
+	// Write icon PNG
+	os.open(outputDirPath + fileName + "_Icon.png", std::ios::out | std::ios::ate | std::ios::binary);
+	os << l_icon;
+	os.close();
+
+	// Write ProductHints
+	os.open(outputDirPath + fileName + "_ProductHints.xml", std::ios::out | std::ios::ate | std::ios::binary);
+	os << l_ProductHints;
+	os.close();
+
+	// Write lib info
+	os.open(outputDirPath + fileName + "_LibInfo.xml", std::ios::out | std::ios::ate | std::ios::binary);
+	os << l_LibInfo;
+	os.close();
+
+	// Write wallpaper PNG
+	os.open(outputDirPath + fileName + "_Wallpaper.png", std::ios::out | std::ios::ate | std::ios::binary);
+	os << l_Wallpaper;
+	os.close();
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc != 3)
@@ -226,11 +321,21 @@ int main(int argc, char *argv[])
 
 	if (l_option == "-e")
 	{
-		extractNICNT(l_inputFilePathStr, l_outputDirPath, l_fileName);
+		if (l_extension == ".nicnt")
+		{
+			extractNICNT(l_inputFilePathStr, l_outputDirPath, l_fileName);
+		}
+		else if (l_extension == ".nkx")
+		{
+			extractNKX(l_inputFilePathStr, l_outputDirPath, l_fileName);
+		}
 	}
 	else if (l_option == "-c")
 	{
-		createNICNT(l_inputFilePathStr, l_outputDirPath, l_fileName);
+		if (l_extension == ".nicnt")
+		{
+			createNICNT(l_inputFilePathStr, l_outputDirPath, l_fileName);
+		}
 	}
 	else
 	{
