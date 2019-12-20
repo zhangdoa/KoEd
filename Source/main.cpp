@@ -74,6 +74,8 @@ char *sstrstr(char *haystack, const char *needle, size_t length)
 
 void extractNICNT(const std::string& inputFilePath, const std::string& outputDirPath, const std::string& fileName)
 {
+	NINCTChunkSize chunkSize;
+
 	// Load .nicnt
 	std::ofstream os;
 	auto l_buffer = readFile(inputFilePath);
@@ -108,23 +110,30 @@ void extractNICNT(const std::string& inputFilePath, const std::string& outputDir
 
 	auto l_PNGStartPos = sstrstr(l_ProductHintsPos + strlen(l_ProductHintsNeedle), l_PNGStartNeedle, l_size);
 
-	// For the ASCII character 89 before "PNG"
-	l_PNGStartPos--;
-
-	auto l_PNGEndPos = sstrstr(l_ProductHintsPos + strlen(l_ProductHintsNeedle), l_PNGEndNeedle, l_size);
-
 	// Extract lib info
 	auto l_LibInfoPos = sstrstr(l_ProductHintsPos, l_XMLNeedle, l_size);
 
-	// Separate string
-	NINCTChunkSize chunkSize;
+	if (l_PNGStartPos != nullptr)
+	{
+		// For the ASCII character 89 before "PNG"
+		l_PNGStartPos--;
 
+		auto l_PNGEndPos = sstrstr(l_ProductHintsPos + strlen(l_ProductHintsNeedle), l_PNGEndNeedle, l_size);
+
+		chunkSize.Bin4 = l_PNGStartPos - l_4thBinPos;
+		chunkSize.Wallpaper = l_PNGEndPos - l_PNGStartPos + strlen(l_PNGEndNeedle) + 4;
+	}
+	else
+	{
+		chunkSize.Bin4 = l_LibInfoPos - l_4thBinPos;
+	}
+
+	// Separate string
 	chunkSize.Bin1 = l_XMLStartPos - &l_buffer[0];
 	chunkSize.ProductHints = l_ProductHintsPos - l_XMLStartPos + strlen(l_ProductHintsNeedle);
 	chunkSize.Bin2 = l_3rdBinPos - l_2ndBinPos;
 	chunkSize.Bin3 = l_4thBinPos - l_3rdBinPos;
-	chunkSize.Bin4 = l_PNGStartPos - l_4thBinPos;
-	chunkSize.Wallpaper = l_PNGEndPos - l_PNGStartPos + strlen(l_PNGEndNeedle) + 4;
+
 	chunkSize.LibInfo = l_size - (l_LibInfoPos - &l_buffer[0]);
 
 	auto l_1stBin = std::string(&l_buffer[0], chunkSize.Bin1);
