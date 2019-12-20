@@ -24,6 +24,30 @@ struct NINCTChunkSize
 	size_t LibInfo = 0;
 };
 
+std::vector<char> readFile(const std::string& inputFilePath)
+{
+	std::ifstream is;
+
+	is.open(inputFilePath, std::ios::in | std::ios::ate | std::ios::binary);
+
+	if (!is.is_open())
+	{
+		std::cerr << "Can't open file : " << inputFilePath << "!";
+		return std::vector<char>();
+	}
+
+	auto pbuf = is.rdbuf();
+	std::size_t l_size = pbuf->pubseekoff(0, is.end, is.in);
+	pbuf->pubseekpos(0, is.in);
+
+	std::vector<char> buffer(l_size);
+	pbuf->sgetn(&buffer[0], l_size);
+
+	is.close();
+
+	return buffer;
+}
+
 char *sstrstr(char *haystack, const char *needle, size_t length)
 {
 	size_t needle_length = strlen(needle);
@@ -48,34 +72,20 @@ char *sstrstr(char *haystack, const char *needle, size_t length)
 // Wallpaper
 // Lib info
 
-void parseContent(const std::string& inputFilePath, const std::string& outputDirPath, const std::string& fileName)
+void extractNICNT(const std::string& inputFilePath, const std::string& outputDirPath, const std::string& fileName)
 {
 	// Load .nicnt
-	std::ifstream is;
 	std::ofstream os;
-
-	is.open(inputFilePath, std::ios::in | std::ios::ate | std::ios::binary);
-
-	if (!is.is_open())
-	{
-		std::cout << "Can't open file : " << inputFilePath << "!";
-		return;
-	}
-
-	auto pbuf = is.rdbuf();
-	std::size_t l_size = pbuf->pubseekoff(0, is.end, is.in);
-	pbuf->pubseekpos(0, is.in);
-
-	std::vector<char> buffer(l_size);
-	pbuf->sgetn(&buffer[0], l_size);
+	auto l_buffer = readFile(inputFilePath);
+	auto l_size = l_buffer.size();
 
 	//// Parsing char array
 	// Extract ProductHints
 	auto l_XMLNeedle = "<?xml";
 	auto l_ProductHintsNeedle = "</ProductHints>";
 
-	auto l_XMLStartPos = sstrstr(&buffer[0], l_XMLNeedle, l_size);
-	auto l_ProductHintsPos = sstrstr(&buffer[0], l_ProductHintsNeedle, l_size);
+	auto l_XMLStartPos = sstrstr(&l_buffer[0], l_XMLNeedle, l_size);
+	auto l_ProductHintsPos = sstrstr(&l_buffer[0], l_ProductHintsNeedle, l_size);
 
 	// Extract NI's custom bin
 	// "2F 5C 20 4E 49 20 46 43  20 4D 54 44 20 20 2F 5C"
@@ -109,15 +119,15 @@ void parseContent(const std::string& inputFilePath, const std::string& outputDir
 	// Separate string
 	NINCTChunkSize chunkSize;
 
-	chunkSize.Bin1 = l_XMLStartPos - &buffer[0];
+	chunkSize.Bin1 = l_XMLStartPos - &l_buffer[0];
 	chunkSize.ProductHints = l_ProductHintsPos - l_XMLStartPos + strlen(l_ProductHintsNeedle);
 	chunkSize.Bin2 = l_3rdBinPos - l_2ndBinPos;
 	chunkSize.Bin3 = l_4thBinPos - l_3rdBinPos;
 	chunkSize.Bin4 = l_PNGStartPos - l_4thBinPos;
 	chunkSize.Wallpaper = l_PNGEndPos - l_PNGStartPos + strlen(l_PNGEndNeedle) + 4;
-	chunkSize.LibInfo = l_size - (l_LibInfoPos - &buffer[0]);
+	chunkSize.LibInfo = l_size - (l_LibInfoPos - &l_buffer[0]);
 
-	auto l_1stBin = std::string(&buffer[0], chunkSize.Bin1);
+	auto l_1stBin = std::string(&l_buffer[0], chunkSize.Bin1);
 	auto l_ProductHints = std::string(l_XMLStartPos, chunkSize.ProductHints);
 	auto l_2ndBin = std::string(l_2ndBinPos, chunkSize.Bin2);
 	auto l_3rdBin = std::string(l_3rdBinPos, chunkSize.Bin3);
@@ -126,54 +136,97 @@ void parseContent(const std::string& inputFilePath, const std::string& outputDir
 	auto l_LibInfo = std::string(l_LibInfoPos, chunkSize.LibInfo);
 
 	// Write bin
-	os.open(outputDirPath + fileName + "_Unknown_01.bin", std::ios::binary);
+	os.open(outputDirPath + fileName + "_Unknown_01.bin", std::ios::out | std::ios::ate | std::ios::binary);
 	os << l_1stBin;
 	os.close();
 
-	os.open(outputDirPath + fileName + "_Unknown_02.bin", std::ios::binary);
+	os.open(outputDirPath + fileName + "_Unknown_02.bin", std::ios::out | std::ios::ate | std::ios::binary);
 	os << l_2ndBin;
 	os.close();
 
-	os.open(outputDirPath + fileName + "_Unknown_03.bin", std::ios::binary);
+	os.open(outputDirPath + fileName + "_Unknown_03.bin", std::ios::out | std::ios::ate | std::ios::binary);
 	os << l_3rdBin;
 	os.close();
 
-	os.open(outputDirPath + fileName + "_Unknown_04.bin", std::ios::binary);
+	os.open(outputDirPath + fileName + "_Unknown_04.bin", std::ios::out | std::ios::ate | std::ios::binary);
 	os << l_4thBin;
 	os.close();
 
 	// Write ProductHints
-	os.open(outputDirPath + fileName + "_ProductHints.xml");
+	os.open(outputDirPath + fileName + "_ProductHints.xml", std::ios::out | std::ios::ate | std::ios::binary);
 	os << l_ProductHints;
 	os.close();
 
 	// Write wallpaper PNG
-	os.open(outputDirPath + fileName + "_Wallpaper.png", std::ios::binary);
+	os.open(outputDirPath + fileName + "_Wallpaper.png", std::ios::out | std::ios::ate | std::ios::binary);
 	os << l_Wallpaper;
 	os.close();
 
 	// Write lib info
-	os.open(outputDirPath + fileName + "_LibInfo.xml");
+	os.open(outputDirPath + fileName + "_LibInfo.xml", std::ios::out | std::ios::ate | std::ios::binary);
 	os << l_LibInfo;
 	os.close();
+}
 
-	// Write size info
+void createNICNT(const std::string& inputFilePath, const std::string& outputDirPath, const std::string& fileName)
+{
+	std::ofstream os;
+	os.open(outputDirPath + fileName + "_export.nicnt", std::ios::out | std::ios::ate | std::ios::binary);
+
+	auto l_buffer = readFile(outputDirPath + fileName + "_Unknown_01.bin");
+	os.write(&l_buffer[0], l_buffer.size());
+
+	l_buffer = readFile(outputDirPath + fileName + "_ProductHints.xml");
+	os.write(&l_buffer[0], l_buffer.size());
+
+	auto l_size = l_buffer.size();
+	auto l_paddingSize = 512000 - l_size;
+	std::vector<char> l_padding(l_paddingSize);
+	os.write(&l_padding[0], l_padding.size());
+
+	l_buffer = readFile(outputDirPath + fileName + "_Unknown_02.bin");
+	os.write(&l_buffer[0], l_buffer.size());
+	l_buffer = readFile(outputDirPath + fileName + "_Unknown_03.bin");
+	os.write(&l_buffer[0], l_buffer.size());
+	l_buffer = readFile(outputDirPath + fileName + "_Unknown_04.bin");
+	os.write(&l_buffer[0], l_buffer.size());
+
+	l_buffer = readFile(outputDirPath + fileName + "_Wallpaper.png");
+	os.write(&l_buffer[0], l_buffer.size());
+
+	l_buffer = readFile(outputDirPath + fileName + "_LibInfo.xml");
+	os.write(&l_buffer[0], l_buffer.size());
+
+	os.close();
 }
 
 int main(int argc, char *argv[])
 {
-	if (argc != 2)
+	if (argc != 3)
 	{
-		std::cerr << "Usage: " << argv[0] << " Input" << argv[1] << std::endl;
+		std::cerr << "Usage: " << argv[0] << " -[Option] \"FilePath\"" << std::endl;
 		return 0;
 	}
 
-	auto l_inputFilePath = fs::path(argv[1]);
+	std::string l_option = argv[1];
+	auto l_inputFilePath = fs::path(argv[2]);
 	auto l_inputFilePathStr = l_inputFilePath.generic_string();
 	auto l_fileName = l_inputFilePath.stem().generic_string();
+	auto l_extension = l_inputFilePath.extension().generic_string();
 	auto l_outputDirPath = l_inputFilePath.remove_filename().generic_string();
 
-	parseContent(l_inputFilePathStr, l_outputDirPath, l_fileName);
+	if (l_option == "-e")
+	{
+		extractNICNT(l_inputFilePathStr, l_outputDirPath, l_fileName);
+	}
+	else if (l_option == "-c")
+	{
+		createNICNT(l_inputFilePathStr, l_outputDirPath, l_fileName);
+	}
+	else
+	{
+		std::cerr << "Unsupported option: " << l_option << "!" << std::endl;
+	}
 
 	return 0;
 }
