@@ -1,0 +1,4 @@
+[submodule "GitSubmodules/WinReg"]
+	path = GitSubmodules/WinReg
+	url = https://github.com/GiovanniDicanio/WinReg
+	ignore = dirty
