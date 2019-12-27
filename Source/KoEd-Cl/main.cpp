@@ -1,5 +1,7 @@
 #pragma once
-#include "FileParser.h"
+#include "../KoEd-Core/FileParser.h"
+#include "../KoEd-Core/RegManager.h"
+
 using namespace KoEd;
 
 #ifdef __GNUC__

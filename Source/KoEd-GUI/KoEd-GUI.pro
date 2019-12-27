@@ -42,3 +42,10 @@ FORMS += \
 qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
+
+win32:CONFIG(release, debug|release):LIBS += -L$$PWD/../../Build/LibArchive/Release/ -lKoEd-Core
+else:win32:CONFIG(debug, debug|release):LIBS += -L$$PWD/../../Build/LibArchive/Debug/ -lKoEd-Core
+else:unix: LIBS += -L$$PWD/../../../Build/LibArchive/ -lKoEd-Core
+
+win32:CONFIG(release, debug|release):LIBS += -ladvapi32
+else:win32:CONFIG(debug, debug|release):LIBS += -ladvapi32
