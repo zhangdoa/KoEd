@@ -26,7 +26,7 @@ namespace KoEd
 		return buffer;
 	}
 
-	char *sstrstr(char *haystack, const char *needle, size_t length)
+	char* sstrstr(char* haystack, const char* needle, size_t length)
 	{
 		size_t needle_length = strlen(needle);
 		size_t i;
@@ -41,14 +41,57 @@ namespace KoEd
 		return NULL;
 	}
 
-	// The file structure of .nicnt
-	// Bin 1 256 B
-	// ProductHints + padding 512000 B
-	// Bin 2 288 B
-	// Bin 3 1920 B
-	// Bin 4 608 B
-	// Wallpaper
-	// Lib info
+	// The file structure of .nicnt:
+
+	// Bin 1 = 256B as:
+	// 16B BinNeedle_1
+	// 2F 5C 20 4E 49 20 46 43 20 4D 54 44 20 20 2F 5C
+	// or "/\ NI FC MTD  /\"
+	// 50B padding
+	// 10B version string
+	// 52B padding
+	// 32B static unknown info
+	// 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00
+	// 00 D0 07 00 00 D0 07 00 00 00 00 00 00 00 00 00
+	// 96B padding
+
+	// Non-static length ProductHints XML
+
+	// 512000B padding
+
+	// Bin 2 = 288B as:
+	// 16B BinNeedle_1
+	// 112B padding
+	// 32B static unknown info
+	// 00 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00
+	// 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+	// 96B padding
+	// 16B static unknown info
+	// 01 00 00 00 00 00 00 00 F0 F0 F0 F0 F0 F0 F0 F0
+	// 16B variable unknown info
+	// VV 00 00 00 00 00 00 00 VV VV VV 00 00 00 00 00
+
+	// Bin 3 as:
+	// 16B BinNeedle_2
+	// 2F 5C 20 4E 49 20 46 43 20 54 4F 43 20 20 2F 5C
+	// or "/\ NI FC TOC  /\"
+	// Then sub-chunks as:
+	// 8B variable unknown info
+	// VV VV VV 00 00 00 00 00
+	// 8B index
+	// II 00 00 00 00 00 00 00
+	// 16B padding
+	// file extension start with '.'
+
+	// @TODO: analysis the database structure of bin 3
+
+	// Bin 4 = 608B as:
+	// 16B BinNeedle_2
+	// 592B padding
+
+	// Wallpaper PNG
+
+	// Lib info XML
 
 	void extractNICNT(const std::string& inputFilePath, const std::string& outputDirPath, const std::string& fileName)
 	{
@@ -59,100 +102,99 @@ namespace KoEd
 		auto l_buffer = readFile(inputFilePath);
 		auto l_size = l_buffer.size();
 
+		auto l_1stBinStartPos = &l_buffer[0];
+
 		// Extract ProductHints
-		auto l_XMLNeedle = "<?xml";
-		auto l_ProductHintsNeedle = "</ProductHints>";
+		auto l_ProductHintsStartNeedle = "<?xml";
+		auto l_ProductHintsEndNeedle = "</ProductHints>";
 
-		auto l_XMLStartPos = sstrstr(&l_buffer[0], l_XMLNeedle, l_size);
-		auto l_ProductHintsPos = sstrstr(&l_buffer[0], l_ProductHintsNeedle, l_size);
+		auto l_ProductHintsStartPos = sstrstr(l_1stBinStartPos, l_ProductHintsStartNeedle, l_size);
+		auto l_ProductHintsEndPos = sstrstr(l_ProductHintsStartPos, l_ProductHintsEndNeedle, l_size);
+		l_ProductHintsEndPos += strlen(l_ProductHintsEndNeedle);
 
-		// Extract NI's custom bin
-		// "2F 5C 20 4E 49 20 46 43  20 4D 54 44 20 20 2F 5C"
-		// "/\ NI FC MTD  /\"
-		// "2F 5C 20 4E 49 20 46 43  20 54 4F 43 20 20 2F 5C"
-		// "/\ NI FC TOC  /\"
-		auto l_BinNeedle_1 = "NI FC MTD";
-		auto l_BinNeedle_2 = "NI FC TOC";
+		// Extract other custom bin
+		auto l_BinNeedle_1 = "/\\ NI FC MTD  /\\";
+		auto l_BinNeedle_2 = "/\\ NI FC TOC  /\\";
 
-		auto l_2ndBinPos = sstrstr(l_XMLStartPos, l_BinNeedle_1, l_size);
-		l_2ndBinPos -= 3;
-		auto l_3rdBinPos = sstrstr(l_2ndBinPos, l_BinNeedle_2, l_size);
-		l_3rdBinPos -= 3;
-		auto l_4thBinPos = sstrstr(l_3rdBinPos + 16, l_BinNeedle_2, l_size);
-		l_4thBinPos -= 3;
+		auto l_2ndBinStartPos = sstrstr(l_ProductHintsEndPos, l_BinNeedle_1, l_size);
+		auto l_3rdBinStartPos = sstrstr(l_2ndBinStartPos, l_BinNeedle_2, l_size);
+		// since the 3rd bin has same needle as the 4th one, we need to ignore the 3rd's
+		auto l_4thBinStartPos = sstrstr(l_3rdBinStartPos + sizeof(l_BinNeedle_2), l_BinNeedle_2, l_size);
+
+		// Extract lib info
+		auto l_LibStartNeedle = "<?xml";
+		auto l_LibEndNeedle = "</soundinfos>";
+		auto l_LibInfoStartPos = sstrstr(l_4thBinStartPos, l_LibStartNeedle, l_size);
+		auto l_LibInfoEndPos = sstrstr(l_LibInfoStartPos, l_LibEndNeedle, l_size);
+		l_LibInfoEndPos += strlen(l_LibEndNeedle);
 
 		// Extract wallpaper PNG
 		auto l_PNGStartNeedle = "PNG";
 		auto l_PNGEndNeedle = "IEND";
-
-		auto l_PNGStartPos = sstrstr(l_ProductHintsPos + strlen(l_ProductHintsNeedle), l_PNGStartNeedle, l_size);
-
-		// Extract lib info
-		auto l_LibEndNeedle = "</soundinfos>";
-		auto l_LibInfoStartPos = sstrstr(l_ProductHintsPos, l_XMLNeedle, l_size);
-		auto l_LibInfoEndPos = sstrstr(l_ProductHintsPos, l_LibEndNeedle, l_size);
-
+		auto l_PNGStartPos = sstrstr(l_ProductHintsEndPos, l_PNGStartNeedle, l_size);
 		if (l_PNGStartPos != nullptr)
 		{
 			// For the ASCII character 89 before "PNG"
 			l_PNGStartPos--;
 
-			auto l_PNGEndPos = sstrstr(l_ProductHintsPos + strlen(l_ProductHintsNeedle), l_PNGEndNeedle, l_size);
-
-			chunkSize.Bin4 = l_PNGStartPos - l_4thBinPos;
+			auto l_PNGEndPos = sstrstr(l_ProductHintsEndPos, l_PNGEndNeedle, l_size);
+			l_PNGEndPos += strlen(l_PNGEndNeedle);
 
 			// From [ASCII89]PNG to IEND + 4B useless chunk data
-			chunkSize.Wallpaper = l_PNGEndPos - l_PNGStartPos + strlen(l_PNGEndNeedle) + 4;
+			chunkSize.Wallpaper = l_PNGEndPos - l_PNGStartPos + 4;
 		}
-		else
-		{
-			chunkSize.Bin4 = l_LibInfoStartPos - l_4thBinPos;
-		}
-
-		// Separate string
-		chunkSize.Bin1 = l_XMLStartPos - &l_buffer[0];
-		chunkSize.ProductHints = l_ProductHintsPos - l_XMLStartPos + strlen(l_ProductHintsNeedle);
-		chunkSize.Bin2 = l_3rdBinPos - l_2ndBinPos;
-		chunkSize.Bin3 = l_4thBinPos - l_3rdBinPos;
-
-		chunkSize.LibInfo = l_LibInfoEndPos - l_LibInfoStartPos + strlen(l_LibEndNeedle);
-
-		auto l_1stBin = std::string(&l_buffer[0], chunkSize.Bin1);
-		auto l_ProductHints = std::string(l_XMLStartPos, chunkSize.ProductHints);
-		auto l_2ndBin = std::string(l_2ndBinPos, chunkSize.Bin2);
-		auto l_3rdBin = std::string(l_3rdBinPos, chunkSize.Bin3);
-		auto l_4thBin = std::string(l_4thBinPos, chunkSize.Bin4);
-		auto l_Wallpaper = std::string(l_PNGStartPos, chunkSize.Wallpaper);
-		auto l_LibInfo = std::string(l_LibInfoStartPos, chunkSize.LibInfo);
 
 		// Write bin
+		chunkSize.Bin1 = l_ProductHintsStartPos - l_1stBinStartPos;
+		auto l_1stBin = std::string(&l_buffer[0], chunkSize.Bin1);
 		os.open(outputDirPath + fileName + "_Unknown_01.bin", std::ios::out | std::ios::ate | std::ios::binary);
 		os << l_1stBin;
 		os.close();
 
+		chunkSize.Bin2 = l_3rdBinStartPos - l_2ndBinStartPos;
+		auto l_2ndBin = std::string(l_2ndBinStartPos, chunkSize.Bin2);
 		os.open(outputDirPath + fileName + "_Unknown_02.bin", std::ios::out | std::ios::ate | std::ios::binary);
 		os << l_2ndBin;
 		os.close();
 
+		chunkSize.Bin3 = l_4thBinStartPos - l_3rdBinStartPos;
+		auto l_3rdBin = std::string(l_3rdBinStartPos, chunkSize.Bin3);
 		os.open(outputDirPath + fileName + "_Unknown_03.bin", std::ios::out | std::ios::ate | std::ios::binary);
 		os << l_3rdBin;
 		os.close();
 
+		if (l_PNGStartPos != nullptr)
+		{
+			chunkSize.Bin4 = l_PNGStartPos - l_4thBinStartPos;
+		}
+		else
+		{
+			chunkSize.Bin4 = l_LibInfoStartPos - l_4thBinStartPos;
+		}
+		auto l_4thBin = std::string(l_4thBinStartPos, chunkSize.Bin4);
 		os.open(outputDirPath + fileName + "_Unknown_04.bin", std::ios::out | std::ios::ate | std::ios::binary);
 		os << l_4thBin;
 		os.close();
 
 		// Write ProductHints
+		chunkSize.ProductHints = l_ProductHintsEndPos - l_ProductHintsStartPos;
+		auto l_ProductHints = std::string(l_ProductHintsStartPos, chunkSize.ProductHints);
 		os.open(outputDirPath + fileName + "_ProductHints.xml", std::ios::out | std::ios::ate | std::ios::binary);
 		os << l_ProductHints;
 		os.close();
 
 		// Write wallpaper PNG
-		os.open(outputDirPath + fileName + "_Wallpaper.png", std::ios::out | std::ios::ate | std::ios::binary);
-		os << l_Wallpaper;
-		os.close();
+		if (l_PNGStartPos != nullptr)
+		{
+			auto l_Wallpaper = std::string(l_PNGStartPos, chunkSize.Wallpaper);
+			os.open(outputDirPath + fileName + "_Wallpaper.png", std::ios::out | std::ios::ate | std::ios::binary);
+			os << l_Wallpaper;
+			os.close();
+		}
 
 		// Write lib info
+		chunkSize.LibInfo = l_LibInfoEndPos - l_LibInfoStartPos;
+		auto l_LibInfo = std::string(l_LibInfoStartPos, chunkSize.LibInfo);
 		os.open(outputDirPath + fileName + "_LibInfo.xml", std::ios::out | std::ios::ate | std::ios::binary);
 		os << l_LibInfo;
 		os.close();

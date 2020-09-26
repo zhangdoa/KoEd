@@ -25,24 +25,24 @@ int main(int argc, char *argv[])
 	auto l_inputFilePathStr = l_inputFilePath.generic_string();
 	auto l_fileName = l_inputFilePath.stem().generic_string();
 	auto l_extension = l_inputFilePath.extension().generic_string();
-	auto l_outputDirPath = l_inputFilePath.remove_filename().generic_string();
+	auto l_outputDirPathStr = l_inputFilePath.remove_filename().generic_string();
 
 	if (l_option == "-e")
 	{
 		if (l_extension == ".nicnt")
 		{
-			extractNICNT(l_inputFilePathStr, l_outputDirPath, l_fileName);
+			extractNICNT(l_inputFilePathStr, l_outputDirPathStr, l_fileName);
 		}
 		else if (l_extension == ".nkx")
 		{
-			extractNKX(l_inputFilePathStr, l_outputDirPath, l_fileName);
+			extractNKX(l_inputFilePathStr, l_outputDirPathStr, l_fileName);
 		}
 	}
 	else if (l_option == "-c")
 	{
 		if (l_extension == ".nicnt")
 		{
-			createNICNT(l_inputFilePathStr, l_outputDirPath, l_fileName);
+			createNICNT(l_inputFilePathStr, l_outputDirPathStr, l_fileName);
 		}
 	}
 	else
