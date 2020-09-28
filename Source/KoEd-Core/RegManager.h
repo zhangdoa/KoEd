@@ -11,4 +11,5 @@ namespace KoEd
 	};
 
 	std::vector<LibInfo> GetLibInfos();
+	void RegisterLibraries(const std::string& kontaktLibPath);
 }

@@ -4,21 +4,19 @@
 
 using namespace KoEd;
 
-#ifdef __GNUC__
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
-#else
+#include <iostream>
 #include <filesystem>
 namespace fs = std::filesystem;
-#endif
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
 	if (argc != 3)
 	{
 		std::cerr << "Usage: " << argv[0] << " -[Option] \"FilePath\"" << std::endl;
 		return 0;
 	}
+
+	InitializeEnvironment();
 
 	std::string l_option = argv[1];
 	auto l_inputFilePath = fs::path(argv[2]);
@@ -44,6 +42,10 @@ int main(int argc, char *argv[])
 		{
 			createNICNT(l_inputFilePathStr, l_outputDirPathStr, l_fileName);
 		}
+	}
+	if (l_option == "-r")
+	{
+		RegisterLibraries(argv[2]);
 	}
 	else
 	{

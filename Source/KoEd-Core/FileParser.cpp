@@ -1,7 +1,58 @@
 #include "FileParser.h"
+#include "../../GitSubmodules/tinyxml2/tinyxml2.h"
+#include "../../GitSubmodules/tinyxml2/tinyxml2.cpp"
+
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <unordered_map>
 
 namespace KoEd
 {
+	std::unordered_map<std::string, ProductHints> productHintsMap;
+	tinyxml2::XMLDocument NA;
+
+	void InitializeEnvironment()
+	{
+		NA.LoadFile("C:\\Program Files\\Common Files\\Native Instruments\\Service Center\\NativeAccess.xml");
+		auto elem = NA.RootElement()->FirstChildElement("Product");
+
+		while (elem)
+		{
+			ProductHints l_ProductHints;
+
+			std::string l_name = elem->FirstChildElement("Name")->GetText();
+
+			if (auto l_ProductSpecific = elem->FirstChildElement("ProductSpecific"))
+			{
+				if (auto l_HU = l_ProductSpecific->FirstChildElement("HU"))
+				{
+					l_ProductHints.HU = l_HU->GetText();
+				}
+				if (auto l_JDX = l_ProductSpecific->FirstChildElement("JDX"))
+				{
+					l_ProductHints.JDX = l_JDX->GetText();
+				}
+				if (auto l_Visibility = l_ProductSpecific->FirstChildElement("Visibility"))
+				{
+					l_ProductHints.Visibility = l_Visibility->GetText();
+				}
+			}
+
+			productHintsMap.emplace(l_name, l_ProductHints);
+
+			if (elem->NextSiblingElement())
+			{
+				elem = elem->NextSiblingElement();
+			}
+			else
+			{
+				elem = nullptr;
+			}
+		}
+	}
+
 	std::vector<char> readFile(const std::string& inputFilePath)
 	{
 		std::ifstream is;
@@ -50,7 +101,7 @@ namespace KoEd
 	// 50B padding
 	// 10B version string
 	// 52B padding
-	// 32B static unknown info
+	// 32B static unknown info (00 D0 07 00 = 512000 same as the size of the large padding next)
 	// 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00
 	// 00 D0 07 00 00 D0 07 00 00 00 00 00 00 00 00 00
 	// 96B padding
@@ -68,20 +119,33 @@ namespace KoEd
 	// 96B padding
 	// 16B static unknown info
 	// 01 00 00 00 00 00 00 00 F0 F0 F0 F0 F0 F0 F0 F0
-	// 16B variable unknown info
-	// VV 00 00 00 00 00 00 00 VV VV VV 00 00 00 00 00
+	// 8B the count of sections in Bin 3
+	// NN 00 00 00 00 00 00 00
+	// 8B variable unknown info
+	// VV VV VV 00 00 00 00 00
 
-	// Bin 3 as:
+	// Bin 3 has multiple sub-chunks, 608B + 32B for each chunk, looks like single-linked-list:
+	// First chunk:
+	// starts with:
 	// 16B BinNeedle_2
 	// 2F 5C 20 4E 49 20 46 43 20 54 4F 43 20 20 2F 5C
 	// or "/\ NI FC TOC  /\"
-	// Then sub-chunks as:
+	// then
+	// Then :
+	// file extension start with '.', pad until the:
 	// 8B variable unknown info
 	// VV VV VV 00 00 00 00 00
 	// 8B index
 	// II 00 00 00 00 00 00 00
 	// 16B padding
-	// file extension start with '.'
+
+	// Last chunk
+	// ends with:
+	// the same 8B variable unknown info at the end of Bin 2
+	// VV VV VV 00 00 00 00 00
+	// 8B static unknown info
+	// F1 F1 F1 F1 F1 F1 F1 F1
+	// 16B padding
 
 	// @TODO: analysis the database structure of bin 3
 
@@ -322,5 +386,15 @@ namespace KoEd
 		os.open(outputDirPath + fileName + "_Wallpaper.png", std::ios::out | std::ios::ate | std::ios::binary);
 		os << l_Wallpaper;
 		os.close();
+	}
+
+	ProductHints findProductHints(const std::string& name)
+	{
+		auto l_result = productHintsMap.find(name);
+		if (l_result != productHintsMap.end())
+		{
+			return l_result->second;
+		}
+		return ProductHints();
 	}
 }
