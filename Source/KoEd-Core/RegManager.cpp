@@ -44,7 +44,7 @@ namespace KoEd
 
 		for (auto i : l_subKeys)
 		{
-			if (i != L"AddLibSupport" && i != L"ALSupport" && i != L"Kontakt 5" && i != L"Kontakt Application")
+			if (i != L"AddLibSupport" && i != L"ALSupport" && i != L"Kontakt 5" && i != L"Kontakt Application" && i != L"Native Access")
 			{
 				key.DeleteKey(i, KEY_READ | KEY_WRITE);
 			}
@@ -105,9 +105,17 @@ namespace KoEd
 			if (i.path().extension() == ".nicnt")
 			{
 				l_productHints = findProductHints(i.path().stem().generic_string());
+				if (!l_productHints.HU.size())
+				{
+					l_productHints = extractProductHints(i.path().generic_string());
+				}
 				break;
 			}
+			else if (i.path().extension() == ".nkx")
+			{
+			}
 		}
+
 		parent.SetStringValue(L"ContentVersion", L"1.0.0");
 		if (l_productHints.HU.size())
 		{

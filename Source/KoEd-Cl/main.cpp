@@ -43,7 +43,7 @@ int main(int argc, char* argv[])
 			createNICNT(l_inputFilePathStr, l_outputDirPathStr, l_fileName);
 		}
 	}
-	if (l_option == "-r")
+	else if (l_option == "-r")
 	{
 		RegisterLibraries(argv[2]);
 	}

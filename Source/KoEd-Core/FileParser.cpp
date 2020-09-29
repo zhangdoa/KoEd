@@ -11,12 +11,12 @@
 namespace KoEd
 {
 	std::unordered_map<std::string, ProductHints> productHintsMap;
-	tinyxml2::XMLDocument NA;
+	tinyxml2::XMLDocument NativeAccessXML;
 
 	void InitializeEnvironment()
 	{
-		NA.LoadFile("C:\\Program Files\\Common Files\\Native Instruments\\Service Center\\NativeAccess.xml");
-		auto elem = NA.RootElement()->FirstChildElement("Product");
+		NativeAccessXML.LoadFile("C:\\Program Files\\Common Files\\Native Instruments\\Service Center\\NativeAccess.xml");
+		auto elem = NativeAccessXML.RootElement()->FirstChildElement("Product");
 
 		while (elem)
 		{
@@ -101,61 +101,95 @@ namespace KoEd
 	// 50B padding
 	// 10B version string
 	// 52B padding
-	// 32B static unknown info (00 D0 07 00 = 512000 same as the size of the large padding next)
+	// 32B static unknown info
 	// 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00
+	// 00 D0 07 00 = 512000, same as the ProductHints XML size
 	// 00 D0 07 00 00 D0 07 00 00 00 00 00 00 00 00 00
 	// 96B padding
 
-	// Non-static length ProductHints XML
+	// 512000B length ProductHints XML
 
-	// 512000B padding
-
-	// Bin 2 = 288B as:
+	// Bin 2 = 256B as:
 	// 16B BinNeedle_1
 	// 112B padding
 	// 32B static unknown info
 	// 00 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00
 	// 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 	// 96B padding
+
+	// Bin 3 has multiple sub-chunks, 32B + 608B for each chunk, looks like single-linked-list:
+	// First chunk:
+	// starts with:
 	// 16B static unknown info
-	// 01 00 00 00 00 00 00 00 F0 F0 F0 F0 F0 F0 F0 F0
+	// 01 00 00 00 00 00 00 00
+	// F0 F0 F0 F0 F0 F0 F0 F0
 	// 8B the count of sections in Bin 3
 	// NN 00 00 00 00 00 00 00
 	// 8B variable unknown info
 	// VV VV VV 00 00 00 00 00
-
-	// Bin 3 has multiple sub-chunks, 608B + 32B for each chunk, looks like single-linked-list:
-	// First chunk:
-	// starts with:
 	// 16B BinNeedle_2
 	// 2F 5C 20 4E 49 20 46 43 20 54 4F 43 20 20 2F 5C
 	// or "/\ NI FC TOC  /\"
-	// then
-	// Then :
-	// file extension start with '.', pad until the:
+	// 576B padding
+
+	// Then each chunk:
 	// 8B variable unknown info
 	// VV VV VV 00 00 00 00 00
 	// 8B index
 	// II 00 00 00 00 00 00 00
 	// 16B padding
+	// file extension start with '.', pad until 608B
 
 	// Last chunk
 	// ends with:
-	// the same 8B variable unknown info at the end of Bin 2
+	// 8B variable unknown info, the same as the one in the start chunk
 	// VV VV VV 00 00 00 00 00
 	// 8B static unknown info
 	// F1 F1 F1 F1 F1 F1 F1 F1
 	// 16B padding
-
-	// @TODO: analysis the database structure of bin 3
-
-	// Bin 4 = 608B as:
 	// 16B BinNeedle_2
 	// 592B padding
 
 	// Wallpaper PNG
-
 	// Lib info XML
+
+	std::string extractProductHints(const std::vector<char>& buffer)
+	{
+		return std::string(&buffer[0] + 256, 512000);
+	}
+
+	ProductHints extractProductHints(const std::string& inputFilePath)
+	{
+		std::ofstream os;
+		auto l_buffer = readFile(inputFilePath);
+
+		auto l_ProductHintsStr = extractProductHints(l_buffer);
+
+		ProductHints l_ProductHints;
+
+		tinyxml2::XMLDocument XML;
+		XML.Parse(l_ProductHintsStr.c_str());
+
+		auto elem = XML.RootElement()->FirstChildElement("Product");
+
+		if (auto l_ProductSpecific = elem->FirstChildElement("ProductSpecific"))
+		{
+			if (auto l_HU = l_ProductSpecific->FirstChildElement("HU"))
+			{
+				l_ProductHints.HU = l_HU->GetText();
+			}
+			if (auto l_JDX = l_ProductSpecific->FirstChildElement("JDX"))
+			{
+				l_ProductHints.JDX = l_JDX->GetText();
+			}
+			if (auto l_Visibility = l_ProductSpecific->FirstChildElement("Visibility"))
+			{
+				l_ProductHints.Visibility = l_Visibility->GetText();
+			}
+		}
+
+		return l_ProductHints;
+	}
 
 	void extractNICNT(const std::string& inputFilePath, const std::string& outputDirPath, const std::string& fileName)
 	{
@@ -182,13 +216,11 @@ namespace KoEd
 
 		auto l_2ndBinStartPos = sstrstr(l_ProductHintsEndPos, l_BinNeedle_1, l_size);
 		auto l_3rdBinStartPos = sstrstr(l_2ndBinStartPos, l_BinNeedle_2, l_size);
-		// since the 3rd bin has same needle as the 4th one, we need to ignore the 3rd's
-		auto l_4thBinStartPos = sstrstr(l_3rdBinStartPos + sizeof(l_BinNeedle_2), l_BinNeedle_2, l_size);
 
 		// Extract lib info
 		auto l_LibStartNeedle = "<?xml";
 		auto l_LibEndNeedle = "</soundinfos>";
-		auto l_LibInfoStartPos = sstrstr(l_4thBinStartPos, l_LibStartNeedle, l_size);
+		auto l_LibInfoStartPos = sstrstr(l_3rdBinStartPos, l_LibStartNeedle, l_size);
 		auto l_LibInfoEndPos = sstrstr(l_LibInfoStartPos, l_LibEndNeedle, l_size);
 		l_LibInfoEndPos += strlen(l_LibEndNeedle);
 
@@ -221,23 +253,17 @@ namespace KoEd
 		os << l_2ndBin;
 		os.close();
 
-		chunkSize.Bin3 = l_4thBinStartPos - l_3rdBinStartPos;
-		auto l_3rdBin = std::string(l_3rdBinStartPos, chunkSize.Bin3);
-		os.open(outputDirPath + fileName + "_Unknown_03.bin", std::ios::out | std::ios::ate | std::ios::binary);
-		os << l_3rdBin;
-		os.close();
-
 		if (l_PNGStartPos != nullptr)
 		{
-			chunkSize.Bin4 = l_PNGStartPos - l_4thBinStartPos;
+			chunkSize.Bin3 = l_PNGStartPos - l_3rdBinStartPos;
 		}
 		else
 		{
-			chunkSize.Bin4 = l_LibInfoStartPos - l_4thBinStartPos;
+			chunkSize.Bin3 = l_LibInfoStartPos - l_3rdBinStartPos;
 		}
-		auto l_4thBin = std::string(l_4thBinStartPos, chunkSize.Bin4);
-		os.open(outputDirPath + fileName + "_Unknown_04.bin", std::ios::out | std::ios::ate | std::ios::binary);
-		os << l_4thBin;
+		auto l_3rdBin = std::string(l_3rdBinStartPos, chunkSize.Bin3);
+		os.open(outputDirPath + fileName + "_Unknown_03.bin", std::ios::out | std::ios::ate | std::ios::binary);
+		os << l_3rdBin;
 		os.close();
 
 		// Write ProductHints
@@ -283,8 +309,6 @@ namespace KoEd
 		l_buffer = readFile(outputDirPath + fileName + "_Unknown_02.bin");
 		os.write(&l_buffer[0], l_buffer.size());
 		l_buffer = readFile(outputDirPath + fileName + "_Unknown_03.bin");
-		os.write(&l_buffer[0], l_buffer.size());
-		l_buffer = readFile(outputDirPath + fileName + "_Unknown_04.bin");
 		os.write(&l_buffer[0], l_buffer.size());
 
 		l_buffer = readFile(outputDirPath + fileName + "_Wallpaper.png");
