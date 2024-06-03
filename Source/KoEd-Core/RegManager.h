@@ -6,10 +6,10 @@ namespace KoEd
 {
 	struct LibInfo
 	{
-		std::string name;
-		std::string path;
+		std::wstring name;
+		std::wstring path;
 	};
 
 	std::vector<LibInfo> GetLibInfos();
-	void RegisterLibraries(const std::string& kontaktLibPath);
+	void RegisterLibraries(const std::wstring& kontaktLibPath);
 }

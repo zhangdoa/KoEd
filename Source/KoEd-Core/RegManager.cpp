@@ -23,12 +23,12 @@ namespace KoEd
 		for (auto i : l_subKeys)
 		{
 			LibInfo l_libInfo;
-			l_libInfo.name = std::string(i.begin(), i.end());
+			l_libInfo.name = std::wstring(i.begin(), i.end());
 
 			RegKey key_path{ HKEY_CURRENT_USER, keyFolder + L"\\" + i };
 			auto l_path = key_path.GetStringValue(L"ContentDir");
 
-			l_libInfo.path = std::string(l_path.begin(), l_path.end());
+			l_libInfo.path = std::wstring(l_path.begin(), l_path.end());
 
 			l_result.emplace_back(l_libInfo);
 		}
@@ -36,7 +36,7 @@ namespace KoEd
 		return l_result;
 	}
 
-	void ClearCurrentUserRegKeys(const std::string& kontaktLibPath)
+	void ClearCurrentUserRegKeys(const std::wstring& kontaktLibPath)
 	{
 		RegKey key{ HKEY_CURRENT_USER, L"SOFTWARE\\Native Instruments" };
 
@@ -53,7 +53,7 @@ namespace KoEd
 		key.Close();
 	}
 
-	void ClearLocalMachineRegKeys(const std::string& kontaktLibPath)
+	void ClearLocalMachineRegKeys(const std::wstring& kontaktLibPath)
 	{
 		RegKey key{ HKEY_LOCAL_MACHINE,  L"SOFTWARE\\Native Instruments" };
 
@@ -79,7 +79,7 @@ namespace KoEd
 		key.Close();
 	}
 
-	void ClearRegKeys(const std::string& kontaktLibPath)
+	void ClearRegKeys(const std::wstring& kontaktLibPath)
 	{
 		ClearCurrentUserRegKeys(kontaktLibPath);
 		ClearLocalMachineRegKeys(kontaktLibPath);
@@ -129,7 +129,7 @@ namespace KoEd
 		parent.SetDwordValue(L"Visibility", 3);
 	}
 
-	void RegisterLibraries(const std::string& kontaktLibPath)
+	void RegisterLibraries(const std::wstring& kontaktLibPath)
 	{
 		//AppData\Local\Native Instruments\Kontakt\Db
 		//AppData\Local\Native Instruments\Kontakt\LibrariesCache

@@ -8,6 +8,32 @@ using namespace KoEd;
 #include <filesystem>
 namespace fs = std::filesystem;
 
+std::wstring charToWstring(const char* charStr) 
+{
+	if (charStr == nullptr) {
+		return std::wstring();
+	}
+
+	// Determine the length of the required wide string
+	size_t requiredSize = 0;
+	mbstowcs_s(&requiredSize, nullptr, 0, charStr, 0);
+
+	// Allocate buffer for the wide string, including the null terminator
+	wchar_t* wStr = new wchar_t[requiredSize];
+
+	// Convert the multibyte string to a wide string
+	size_t convertedChars = 0;
+	mbstowcs_s(&convertedChars, wStr, requiredSize, charStr, _TRUNCATE);
+
+	// Create a std::wstring from the wide string buffer
+	std::wstring wString(wStr);
+
+	// Free the allocated buffer
+	delete[] wStr;
+
+	return wString;
+}
+
 int main(int argc, char* argv[])
 {
 	if (argc != 3)
@@ -45,7 +71,8 @@ int main(int argc, char* argv[])
 	}
 	else if (l_option == "-r")
 	{
-		RegisterLibraries(argv[2]);
+		std::wstring wStr = charToWstring(argv[2]);
+		RegisterLibraries(wStr);
 	}
 	else
 	{
